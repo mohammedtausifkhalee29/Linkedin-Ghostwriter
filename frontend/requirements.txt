@@ -1,0 +1,13 @@
+# Streamlit Frontend Requirements
+# Core Framework
+streamlit==1.39.0
+
+# HTTP Client
+httpx==0.27.2
+
+# Data Handling
+pandas==2.2.3
+numpy==2.1.3
+
+# Utilities
+python-dotenv==1.0.1
