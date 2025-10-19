@@ -27,10 +27,15 @@ CREATE TABLE IF NOT EXISTS posts (
     content TEXT NOT NULL,
     template_id INTEGER, -- Can be NULL if generated in Create Post Mode
     generation_mode TEXT NOT NULL, -- 'manual' or 'auto'
+    status TEXT NOT NULL DEFAULT 'published', -- 'draft' or 'published'
+    reference_text TEXT, -- To store extracted text from uploads
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id),
     FOREIGN KEY (template_id) REFERENCES templates (id)
 );
+
+-- Create indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
 
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

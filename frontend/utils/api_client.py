@@ -42,27 +42,59 @@ class APIClient:
     async def generate_post(
         self,
         token: str,
-        mode: str,
+        post_type: str,
         message: str,
-        template_id: Optional[int] = None,
-        post_type: Optional[str] = None,
-        tone: Optional[str] = None,
-        references: Optional[str] = None,
-        additional_context: Optional[str] = None
+        tone: str,
+        reference_text: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate a new post."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{self.api_v1}/posts/",
+                f"{self.api_v1}/posts/generate",
                 headers=self._get_headers(token),
                 json={
-                    "mode": mode,
-                    "message": message,
-                    "template_id": template_id,
                     "post_type": post_type,
+                    "message": message,
                     "tone": tone,
-                    "references": references,
-                    "additional_context": additional_context
+                    "reference_text": reference_text
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def save_draft(
+        self,
+        token: str,
+        content: str,
+        reference_text: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Save a post as draft."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.api_v1}/posts/draft",
+                headers=self._get_headers(token),
+                json={
+                    "content": content,
+                    "reference_text": reference_text
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def send_post(
+        self,
+        token: str,
+        post_content: str,
+        channel: str
+    ) -> Dict[str, Any]:
+        """Send a post via notification channel."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.api_v1}/posts/send",
+                headers=self._get_headers(token),
+                json={
+                    "post_content": post_content,
+                    "channel": channel
                 }
             )
             response.raise_for_status()
@@ -72,30 +104,19 @@ class APIClient:
         self,
         token: str,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        status_filter: Optional[str] = None
     ) -> list[Dict[str, Any]]:
         """Get user's post history."""
+        params = {"skip": skip, "limit": limit}
+        if status_filter:
+            params["status_filter"] = status_filter
+            
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.api_v1}/posts/",
                 headers=self._get_headers(token),
-                params={"skip": skip, "limit": limit}
-            )
-            response.raise_for_status()
-            return response.json()
-    
-    async def send_post(
-        self,
-        token: str,
-        post_id: int,
-        channel: str
-    ) -> Dict[str, Any]:
-        """Send a post via notification channel."""
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.api_v1}/posts/{post_id}/send",
-                headers=self._get_headers(token),
-                json={"channel": channel}
+                params=params
             )
             response.raise_for_status()
             return response.json()

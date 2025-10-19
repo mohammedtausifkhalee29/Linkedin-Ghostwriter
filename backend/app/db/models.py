@@ -49,6 +49,8 @@ class Post(Base):
     content = Column(Text, nullable=False)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     generation_mode = Column(String, nullable=False)  # 'manual' or 'auto'
+    status = Column(String, nullable=False, default='published')  # 'draft' or 'published'
+    reference_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
