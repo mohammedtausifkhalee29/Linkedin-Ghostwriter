@@ -11,6 +11,7 @@ from app.db.models import Post as PostModel
 from app.schemas.post import (
     Post,
     PostGenerateRequest,
+    PostAutoGenerateRequest,
     PostSendRequest,
     PostDraftRequest,
     GeneratePostResponse,
@@ -65,6 +66,77 @@ async def generate_post(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate post: {str(e)}"
+        )
+
+
+@router.post("/generate-auto", response_model=GeneratePostResponse, status_code=status.HTTP_200_OK)
+async def generate_auto_post(
+    request: PostAutoGenerateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """Generate a LinkedIn post using a predefined template (Auto Post Mode).
+    
+    This endpoint generates posts based on selected templates with user-provided
+    context. The template provides structure and the AI fills it with relevant content.
+    """
+    try:
+        from app.db.models import Template as TemplateModel
+        
+        # Get the template
+        template = db.query(TemplateModel).filter(
+            TemplateModel.id == request.template_id
+        ).first()
+        
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with ID {request.template_id} not found"
+            )
+        
+        # Initialize post generator service
+        post_service = PostGeneratorService(db)
+        
+        # Generate post using AI with template
+        generated_content = await post_service.generate_template_post(
+            template=template,
+            message=request.message,
+            tone=request.tone,
+            reference_text=request.reference_text
+        )
+        
+        # Save generated post to database
+        new_post = PostModel(
+            user_id=current_user.id,
+            content=generated_content,
+            template_id=template.id,
+            generation_mode="auto",
+            status="draft",  # Auto-generated posts start as drafts
+            reference_text=request.reference_text
+        )
+        
+        db.add(new_post)
+        db.commit()
+        db.refresh(new_post)
+        
+        return GeneratePostResponse(
+            post={
+                "id": new_post.id,
+                "content": generated_content,
+                "template_name": template.name,
+                "template_category": template.category,
+                "template_structure": template.structure,
+                "status": "draft"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate auto post: {str(e)}"
         )
 
 

@@ -16,16 +16,31 @@ router = APIRouter()
 @router.get("/", response_model=List[Template])
 async def get_templates(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    category: str | None = None
 ):
-    """Get all available post templates."""
-    # TODO: Implement fetching templates
-    # - Query all templates from database
-    # - Group by category if needed
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Get templates not yet implemented"
-    )
+    """Get all available post templates.
+    
+    Args:
+        current_user: Authenticated user
+        db: Database session
+        category: Optional filter by category
+        
+    Returns:
+        List of templates
+    """
+    from app.db.models import Template as TemplateModel
+    
+    query = db.query(TemplateModel)
+    
+    # Filter by category if provided
+    if category:
+        query = query.filter(TemplateModel.category == category)
+    
+    # Order by category and name
+    templates = query.order_by(TemplateModel.category, TemplateModel.name).all()
+    
+    return templates
 
 
 @router.post("/", response_model=Template, status_code=status.HTTP_201_CREATED)

@@ -127,6 +127,115 @@ Guidelines:
             # Fallback to template-based generation
             return self._generate_fallback_post(post_type, message, tone, reference_text)
     
+    async def generate_template_post(
+        self,
+        template,
+        message: str,
+        tone: str,
+        reference_text: Optional[str] = None
+    ) -> str:
+        """
+        Generate a LinkedIn post using a predefined template.
+        
+        Args:
+            template: Template model with structure and prompt
+            message: User's main message/context
+            tone: Desired tone/voice
+            reference_text: Optional reference material
+            
+        Returns:
+            Generated post content following template structure
+        """
+        if not self.agent:
+            # Fallback if Pydantic AI is not available
+            return self._generate_template_fallback(template, message, tone, reference_text)
+        
+        # Build template-specific prompt
+        prompt = self._build_template_prompt(template, message, tone, reference_text)
+        
+        try:
+            # Run AI agent with template context
+            result = await self.agent.run(prompt)
+            generated = result.data
+            
+            # Format post with template structure
+            post_content = self._format_template_post(generated, template.structure)
+            
+            return post_content
+            
+        except Exception as e:
+            print(f"Error generating template post with AI: {e}")
+            # Fallback to simple template
+            return self._generate_template_fallback(template, message, tone, reference_text)
+    
+    def _build_template_prompt(self, template, message: str, tone: str, reference_text: Optional[str]) -> str:
+        """Build prompt for template-based generation."""
+        prompt_parts = [
+            f"Generate a LinkedIn post using this template structure:",
+            f"\nTemplate: {template.name} ({template.category})",
+            f"Structure: {template.structure}",
+            f"\nBase Instructions: {template.prompt}",
+            f"\nUser's Message: {message}",
+            f"Desired Tone: {tone}",
+        ]
+        
+        if reference_text:
+            prompt_parts.append(f"\nReference Material:\n{reference_text[:1000]}")
+        
+        prompt_parts.extend([
+            "\nIMPORTANT:",
+            f"- Follow the {template.structure} structure exactly",
+            f"- Maintain a {tone} tone throughout",
+            "- Keep the post between 800-1500 characters",
+            "- Use line breaks for readability",
+            "- Write in first person for authenticity"
+        ])
+        
+        return "\n".join(prompt_parts)
+    
+    def _format_template_post(self, generated: GeneratedPost, structure: str) -> str:
+        """Format generated content according to template structure."""
+        # Similar to _format_post but respects template structure
+        parts = [
+            generated.hook,
+            "",
+            generated.body,
+            "",
+            f"💡 {generated.lesson}",
+            "",
+            generated.cta
+        ]
+        
+        return "\n".join(parts)
+    
+    def _generate_template_fallback(
+        self,
+        template,
+        message: str,
+        tone: str,
+        reference_text: Optional[str] = None
+    ) -> str:
+        """Generate fallback template post when AI is unavailable."""
+        
+        # Extract structure elements
+        structure_parts = template.structure.split("→")
+        
+        # Build simple post following template
+        post = f"""🔥 {message}
+
+Following the {template.name} structure:
+
+"""
+        
+        for part in structure_parts:
+            post += f"{part.strip()}: Your content here based on '{message}'\n\n"
+        
+        post += f"""💡 Key Insight: {message}
+
+What are your thoughts on this? Let's discuss! 👇"""
+        
+        return post
+    
     def _build_prompt(self, context: PostContext) -> str:
         """Build the prompt for the LLM."""
         prompt_parts = [

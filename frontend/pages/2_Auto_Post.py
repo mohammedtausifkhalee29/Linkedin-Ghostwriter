@@ -1,6 +1,7 @@
 """Auto Post Page - Template-based post generation."""
 
 import streamlit as st
+import asyncio
 from components.layout import render_header, require_auth
 from utils.api_client import APIClient
 
@@ -16,26 +17,42 @@ render_header("🤖 Auto Post", "Use templates for quick post generation")
 # Initialize API client
 api_client = APIClient()
 
+# Initialize session state
+if "generated_post" not in st.session_state:
+    st.session_state.generated_post = None
+if "selected_template_data" not in st.session_state:
+    st.session_state.selected_template_data = None
+if "templates" not in st.session_state:
+    st.session_state.templates = None
+
+# Fetch templates from API
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def fetch_templates():
+    """Fetch templates from API."""
+    try:
+        response = asyncio.run(api_client.get_templates())
+        if response:
+            # Group templates by category
+            categories = {}
+            for template in response:
+                category = template.get("category", "Other")
+                if category not in categories:
+                    categories[category] = []
+                categories[category].append(template)
+            return categories
+    except Exception as e:
+        st.error(f"Failed to load templates: {str(e)}")
+    return None
+
+# Load templates
+template_categories = fetch_templates()
+
+if not template_categories:
+    st.warning("No templates available. Please check your connection.")
+    st.stop()
+
 # Template selection
 st.markdown("### 📝 Select a Template")
-
-# Placeholder templates (will be fetched from API)
-template_categories = {
-    "Case Study": [
-        {"id": 1, "name": "Problem-Solution-Results", "structure": "Hook → Problem → Solution → Results → CTA"},
-        {"id": 2, "name": "Before-After", "structure": "Hook → Before State → Action Taken → After State → Lesson"}
-    ],
-    "Build in Public": [
-        {"id": 3, "name": "Progress Update", "structure": "Hook → What I Built → Challenges → Learnings → Next Steps"},
-        {"id": 4, "name": "Milestone Celebration", "structure": "Hook → Achievement → Journey → Gratitude → Future Goals"}
-    ],
-    "Personal Story": [
-        {"id": 5, "name": "Career Journey", "structure": "Hook → Starting Point → Turning Point → Growth → Lesson"},
-        {"id": 6, "name": "Lesson Learned", "structure": "Hook → Experience → Mistake → Insight → Application"}
-    ]
-}
-
-# Category selection
 selected_category = st.selectbox(
     "Category",
     options=list(template_categories.keys())

@@ -14,6 +14,15 @@ class PostGenerateRequest(BaseModel):
     reference_text: Optional[str] = Field(None, description="Reference text from uploads")
 
 
+class PostAutoGenerateRequest(BaseModel):
+    """Schema for auto post generation request using templates."""
+    
+    template_id: int = Field(..., description="ID of the template to use")
+    message: str = Field(..., min_length=1, max_length=250, description="Main message for the post")
+    tone: str = Field(..., description="Desired tone/voice (e.g., Conversational, Formal, Friendly)")
+    reference_text: Optional[str] = Field(None, description="Optional reference text from uploads")
+
+
 class PostSendRequest(BaseModel):
     """Schema for sending a post."""
     
