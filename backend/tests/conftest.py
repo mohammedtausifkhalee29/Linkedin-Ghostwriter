@@ -70,9 +70,7 @@ def test_user(db_session: Session) -> User:
     """Create a test user in the database."""
     user = User(
         email="testuser@example.com",
-        full_name="Test User",
-        hashed_password=get_password_hash("testpassword123"),
-        is_active=True,
+        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYe3h0p6v3u",  # hashed 'testpass123'
     )
     db_session.add(user)
     db_session.commit()

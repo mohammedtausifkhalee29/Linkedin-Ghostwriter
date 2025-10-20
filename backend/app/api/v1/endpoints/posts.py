@@ -2,7 +2,7 @@
 
 from typing import List, Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.auth import get_current_user
@@ -20,7 +20,8 @@ from app.schemas.post import (
 )
 from app.schemas.user import User
 from app.services.post_generator import PostGeneratorService
-from app.services.notification_service import NotificationService
+from app.services.notification_service import notification_service
+from app.db.models import NotificationPreferences
 
 router = APIRouter()
 
@@ -29,6 +30,7 @@ router = APIRouter()
 async def generate_post(
     request: PostGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Generate a new LinkedIn post using AI."""
@@ -57,6 +59,33 @@ async def generate_post(
         db.commit()
         db.refresh(new_post)
         
+        # Trigger notification in background
+        async def send_notification_task():
+            """Send notification for generated post."""
+            # Get user preferences
+            prefs = db.query(NotificationPreferences).filter(
+                NotificationPreferences.user_id == current_user.id
+            ).first()
+            
+            # Send to enabled channels
+            if prefs:
+                if prefs.receive_telegram_notifications and current_user.telegram_chat_id:
+                    await notification_service.send_post_notification(
+                        db=db,
+                        user_id=current_user.id,
+                        post=new_post,
+                        channel='telegram'
+                    )
+                if prefs.receive_email_notifications:
+                    await notification_service.send_post_notification(
+                        db=db,
+                        user_id=current_user.id,
+                        post=new_post,
+                        channel='email'
+                    )
+        
+        background_tasks.add_task(send_notification_task)
+        
         return GeneratePostResponse(
             post={"content": generated_content, "id": new_post.id}
         )
@@ -73,6 +102,7 @@ async def generate_post(
 async def generate_auto_post(
     request: PostAutoGenerateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Generate a LinkedIn post using a predefined template (Auto Post Mode).
@@ -119,6 +149,33 @@ async def generate_auto_post(
         db.commit()
         db.refresh(new_post)
         
+        # Trigger notification in background
+        async def send_notification_task():
+            """Send notification for auto-generated post."""
+            # Get user preferences
+            prefs = db.query(NotificationPreferences).filter(
+                NotificationPreferences.user_id == current_user.id
+            ).first()
+            
+            # Send to enabled channels
+            if prefs:
+                if prefs.receive_telegram_notifications and current_user.telegram_chat_id:
+                    await notification_service.send_post_notification(
+                        db=db,
+                        user_id=current_user.id,
+                        post=new_post,
+                        channel='telegram'
+                    )
+                if prefs.receive_email_notifications:
+                    await notification_service.send_post_notification(
+                        db=db,
+                        user_id=current_user.id,
+                        post=new_post,
+                        channel='email'
+                    )
+        
+        background_tasks.add_task(send_notification_task)
+        
         return GeneratePostResponse(
             post={
                 "id": new_post.id,
@@ -148,8 +205,6 @@ async def send_post(
 ):
     """Send a generated post via notification channel."""
     try:
-        notification_service = NotificationService()
-        
         if request.channel == "telegram":
             # Check if user has Telegram configured
             if not current_user.telegram_chat_id:
@@ -159,15 +214,16 @@ async def send_post(
                 )
             
             # Send via Telegram
-            success = await notification_service.send_telegram(
+            success, error = await notification_service.send_telegram_message(
                 chat_id=current_user.telegram_chat_id,
-                message=request.post_content
+                message=request.post_content,
+                include_actions=False
             )
             
             if not success:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to send message via Telegram"
+                    detail=f"Failed to send message via Telegram: {error}"
                 )
                 
             return SendPostResponse(
@@ -177,8 +233,8 @@ async def send_post(
             
         elif request.channel == "email":
             # Send via email
-            success = notification_service.send_email(
-                recipient=current_user.email,
+            success, error = notification_service.send_email(
+                to_email=current_user.email,
                 subject="Your LinkedIn Post",
                 body=request.post_content
             )
@@ -186,7 +242,7 @@ async def send_post(
             if not success:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to send email"
+                    detail=f"Failed to send email: {error}"
                 )
                 
             return SendPostResponse(
@@ -282,6 +338,37 @@ async def get_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
+    
+    return post
+
+
+@router.patch("/{post_id}/publish", response_model=Post)
+async def publish_draft(
+    post_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """Publish a draft post."""
+    post = db.query(PostModel).filter(
+        PostModel.id == post_id,
+        PostModel.user_id == current_user.id
+    ).first()
+    
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+    
+    if post.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only draft posts can be published"
+        )
+    
+    post.status = "published"
+    db.commit()
+    db.refresh(post)
     
     return post
 
