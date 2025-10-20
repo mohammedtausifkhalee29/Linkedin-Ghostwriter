@@ -130,3 +130,26 @@ class APIClient:
             )
             response.raise_for_status()
             return response.json()
+    
+    async def generate_auto_post(
+        self,
+        token: str,
+        template_id: int,
+        message: str,
+        tone: str,
+        reference_text: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Generate a post using a template (Auto Post Mode)."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.api_v1}/posts/generate-auto",
+                headers=self._get_headers(token),
+                json={
+                    "template_id": template_id,
+                    "message": message,
+                    "tone": tone,
+                    "reference_text": reference_text
+                }
+            )
+            response.raise_for_status()
+            return response.json()
