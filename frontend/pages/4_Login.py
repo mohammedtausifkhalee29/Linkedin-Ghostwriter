@@ -1,6 +1,7 @@
 """Login Page - User authentication."""
 
 import streamlit as st
+import asyncio
 from utils.api_client import APIClient
 
 # Page config
@@ -59,13 +60,14 @@ with tab1:
         else:
             with st.spinner("Logging in..."):
                 try:
-                    # TODO: Implement actual API call
-                    # result = await api_client.login(email, password)
+                    # Call the actual API
+                    result = asyncio.run(api_client.login(email, password))
                     
-                    # Placeholder - simulate successful login
+                    # Store authentication data
                     st.session_state.authenticated = True
                     st.session_state.user_email = email
-                    st.session_state.access_token = "placeholder_token"
+                    st.session_state.access_token = result.get("access_token")
+                    st.session_state.token = result.get("access_token")  # Some pages use 'token'
                     
                     st.success("Login successful!")
                     st.balloons()
@@ -73,6 +75,7 @@ with tab1:
                     
                 except Exception as e:
                     st.error(f"Login failed: {str(e)}")
+                    st.info("💡 Tip: Make sure you have registered an account first, or check if the backend server is running.")
 
 # Register tab
 with tab2:
@@ -92,19 +95,26 @@ with tab2:
             st.error("Please fill in all fields.")
         elif reg_password != reg_confirm:
             st.error("Passwords do not match.")
+        elif len(reg_password) < 6:
+            st.error("Password must be at least 6 characters long.")
         elif not accept_terms:
             st.error("Please accept the Terms of Service.")
         else:
             with st.spinner("Creating your account..."):
                 try:
-                    # TODO: Implement actual API call
-                    # result = await api_client.register(reg_email, reg_password)
+                    # Call the actual API
+                    result = asyncio.run(api_client.register(reg_email, reg_password))
                     
-                    st.success("Account created successfully! Please login.")
+                    st.success("Account created successfully! Please login with your credentials.")
                     st.balloons()
                     
                 except Exception as e:
-                    st.error(f"Registration failed: {str(e)}")
+                    error_msg = str(e)
+                    if "400" in error_msg:
+                        st.error("Registration failed: Email already exists or invalid data.")
+                    else:
+                        st.error(f"Registration failed: {error_msg}")
+                    st.info("💡 Tip: Make sure the backend server is running.")
 
 # Footer
 st.markdown("---")

@@ -47,7 +47,7 @@ async def load_templates(category_filter: Optional[str] = None, tone_filter: Opt
             tone=tone_filter,
             search=search
         )
-        return result.get("items", [])
+        return result.get("templates", [])  # Changed from "items" to "templates"
     except Exception as e:
         st.error(f"❌ Error loading templates: {str(e)}")
         return []
@@ -75,6 +75,13 @@ async def create_template(name: str, category: str, prompt: str, structure: str,
             example=example
         )
         st.success(f"✅ Template '{name}' created successfully!")
+        # Reset filters to show all templates including the new one
+        if "template_category_filter" in st.session_state:
+            del st.session_state.template_category_filter
+        if "template_tone_filter" in st.session_state:
+            del st.session_state.template_tone_filter
+        if "template_search" in st.session_state:
+            del st.session_state.template_search
         reset_forms()
         st.rerun()
     except Exception as e:
@@ -165,18 +172,20 @@ with col1:
     category_filter = st.selectbox(
         "Category",
         options=["All", "Thought Leadership", "Personal Story", "Industry News", "Tutorial", "Career", "Achievement"],
-        index=0
+        index=0,
+        key="template_category_filter"
     )
 
 with col2:
     tone_filter = st.selectbox(
         "Tone",
         options=["All", "Professional", "Conversational", "Casual", "Inspirational", "Reflective", "Honest"],
-        index=0
+        index=0,
+        key="template_tone_filter"
     )
 
 with col3:
-    search_query = st.text_input("🔎 Search templates", placeholder="Search by name or structure...")
+    search_query = st.text_input("🔎 Search templates", placeholder="Search by name or structure...", key="template_search")
 
 with col4:
     st.write("")  # Spacing
