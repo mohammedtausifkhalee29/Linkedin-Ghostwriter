@@ -26,15 +26,17 @@ if "templates" not in st.session_state:
     st.session_state.templates = None
 
 # Fetch templates from API
-@st.cache_data(ttl=300)  # Cache for 5 minutes
-def fetch_templates():
+def fetch_templates(token: str):
     """Fetch templates from API."""
     try:
-        response = asyncio.run(api_client.get_templates())
-        if response:
+        response = asyncio.run(api_client.get_templates(token=token))
+        # The API returns {"templates": [...], "total": n}
+        templates_list = response.get("templates", []) if isinstance(response, dict) else []
+        
+        if templates_list:
             # Group templates by category
             categories = {}
-            for template in response:
+            for template in templates_list:
                 category = template.get("category", "Other")
                 if category not in categories:
                     categories[category] = []
@@ -45,7 +47,7 @@ def fetch_templates():
     return None
 
 # Load templates
-template_categories = fetch_templates()
+template_categories = fetch_templates(st.session_state.token)
 
 if not template_categories:
     st.warning("No templates available. Please check your connection.")
@@ -110,30 +112,63 @@ if submitted:
     else:
         with st.spinner("Generating your post from template..."):
             try:
-                # TODO: Implement actual API call with template_id
-                st.success(f"Post generated using '{selected_template}' template!")
+                # Call the API to generate post using template
+                result = asyncio.run(api_client.generate_auto_post(
+                    token=st.session_state.token,
+                    template_id=template_data["id"],
+                    message=message,
+                    tone=tone,
+                    reference_text=references if references else None
+                ))
                 
-                # Placeholder for generated post
-                st.markdown("### 📝 Generated Post")
-                st.info("Template-based post generation is not yet implemented. This is a placeholder.")
-                
-                # Action buttons
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    if st.button("📋 Copy", use_container_width=True):
-                        st.toast("Copied!")
-                with col2:
-                    if st.button("🔄 Regenerate", use_container_width=True):
-                        st.toast("Regenerating...")
-                with col3:
-                    if st.button("📱 Telegram", use_container_width=True):
-                        st.toast("Sent to Telegram!")
-                with col4:
-                    if st.button("📧 Email", use_container_width=True):
-                        st.toast("Sent via email!")
+                if result and "post" in result:
+                    st.session_state.generated_post = result["post"]["content"]
+                    st.success(f"✅ Post generated using '{selected_template}' template!")
+                    
+                    # Display generated post
+                    st.markdown("### 📝 Generated Post")
+                    st.text_area(
+                        "Your Generated Post",
+                        value=st.session_state.generated_post,
+                        height=300,
+                        key="post_display"
+                    )
+                    
+                    # Action buttons
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        if st.button("📋 Copy", use_container_width=True):
+                            st.toast("📋 Copied to clipboard!")
+                    with col2:
+                        if st.button("🔄 Regenerate", use_container_width=True):
+                            st.rerun()
+                    with col3:
+                        if st.button("📱 Telegram", use_container_width=True):
+                            try:
+                                send_result = asyncio.run(api_client.send_post(
+                                    token=st.session_state.token,
+                                    post_content=st.session_state.generated_post,
+                                    channel="telegram"
+                                ))
+                                st.success("✅ Sent to Telegram!")
+                            except Exception as e:
+                                st.error(f"❌ Error sending to Telegram: {str(e)}")
+                    with col4:
+                        if st.button("📧 Email", use_container_width=True):
+                            try:
+                                send_result = asyncio.run(api_client.send_post(
+                                    token=st.session_state.token,
+                                    post_content=st.session_state.generated_post,
+                                    channel="email"
+                                ))
+                                st.success("✅ Sent via email!")
+                            except Exception as e:
+                                st.error(f"❌ Error sending email: {str(e)}")
+                else:
+                    st.error("❌ Failed to generate post. Please try again.")
                         
             except Exception as e:
-                st.error(f"Error generating post: {str(e)}")
+                st.error(f"❌ Error generating post: {str(e)}")
 
 # Template info
 with st.expander("ℹ️ About Templates"):

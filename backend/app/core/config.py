@@ -1,5 +1,7 @@
 """Application configuration settings."""
 
+import os
+from pathlib import Path
 from typing import List
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings."""
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(Path(__file__).parent.parent.parent.parent / ".env"),  # Look for .env in project root
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore"
@@ -27,8 +29,10 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = Field(default=["http://localhost:8501"])
     
-    # Database
-    DATABASE_URL: str = Field(default="sqlite:///./database/ghostwriter.db")
+    # Database - Use absolute path to avoid path resolution issues
+    DATABASE_URL: str = Field(
+        default=f"sqlite:///{Path(__file__).parent.parent.parent.parent / 'database' / 'linkedin_ghostwriter.db'}"
+    )
     
     # AI/LLM
     OPENAI_API_KEY: str = Field(default="")

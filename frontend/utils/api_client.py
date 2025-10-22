@@ -24,7 +24,8 @@ class APIClient:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.api_v1}/auth/token",
-                data={"username": email, "password": password}
+                data={"username": email, "password": password},
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
             response.raise_for_status()
             return response.json()

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class UserBase(BaseModel):
@@ -14,7 +14,15 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for user registration."""
     
-    password: str
+    password: str = Field(min_length=6, max_length=72)
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_bytes(cls, v: str) -> str:
+        """Ensure password doesn't exceed bcrypt's 72 byte limit."""
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('Password cannot exceed 72 bytes')
+        return v
 
 
 class UserUpdate(BaseModel):

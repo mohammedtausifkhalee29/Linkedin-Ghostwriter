@@ -42,10 +42,13 @@ class PostGeneratorService:
         
         # Initialize Pydantic AI agent if available
         if PYDANTIC_AI_AVAILABLE and settings.OPENAI_API_KEY:
-            self.model = OpenAIModel(settings.LLM_MODEL, api_key=settings.OPENAI_API_KEY)
+            import os
+            # Set the API key in environment for pydantic-ai to use
+            os.environ['OPENAI_API_KEY'] = settings.OPENAI_API_KEY
+            
+            # Create agent with string output (simpler approach)
             self.agent = Agent(
-                model=self.model,
-                result_type=GeneratedPost,
+                settings.LLM_MODEL,
                 system_prompt=self._get_system_prompt()
             )
         else:
@@ -113,17 +116,23 @@ Guidelines:
         prompt = self._build_prompt(context)
         
         try:
-            # Run AI agent
+            # Run AI agent - returns plain string now
             result = await self.agent.run(prompt)
-            generated = result.data
             
-            # Combine structured output into final post
-            post_content = self._format_post(generated)
+            # Access the result content
+            if hasattr(result, 'data'):
+                post_content = result.data
+            elif hasattr(result, 'output'):
+                post_content = result.output
+            else:
+                post_content = str(result)
             
             return post_content
             
         except Exception as e:
             print(f"Error generating post with AI: {e}")
+            import traceback
+            print(traceback.format_exc())
             # Fallback to template-based generation
             return self._generate_fallback_post(post_type, message, tone, reference_text)
     
@@ -154,17 +163,23 @@ Guidelines:
         prompt = self._build_template_prompt(template, message, tone, reference_text)
         
         try:
-            # Run AI agent with template context
+            # Run AI agent with template context - returns plain string now
             result = await self.agent.run(prompt)
-            generated = result.data
             
-            # Format post with template structure
-            post_content = self._format_template_post(generated, template.structure)
+            # Access the result content
+            if hasattr(result, 'data'):
+                post_content = result.data
+            elif hasattr(result, 'output'):
+                post_content = result.output
+            else:
+                post_content = str(result)
             
             return post_content
             
         except Exception as e:
             print(f"Error generating template post with AI: {e}")
+            import traceback
+            print(traceback.format_exc())
             # Fallback to simple template
             return self._generate_template_fallback(template, message, tone, reference_text)
     
@@ -217,22 +232,41 @@ Guidelines:
     ) -> str:
         """Generate fallback template post when AI is unavailable."""
         
-        # Extract structure elements
-        structure_parts = template.structure.split("→")
+        # Note: This is a simplified fallback. For AI-powered generation, configure OPENAI_API_KEY
         
-        # Build simple post following template
-        post = f"""🔥 {message}
+        # Build post following template structure
+        post = f"""{message}
 
-Following the {template.name} structure:
+---
 
+📝 This post follows the "{template.name}" template structure:
+{template.structure}
+
+💡 Tone: {tone}
+
+⚠️ **Note:** AI-powered generation is not configured. To generate high-quality, contextual LinkedIn posts:
+
+1. Set up your OpenAI API key in the .env file:
+   OPENAI_API_KEY=your-api-key-here
+
+2. Install pydantic-ai if not already installed:
+   pip install pydantic-ai
+
+3. Restart the backend service
+
+With AI enabled, this template will generate engaging, professional LinkedIn posts tailored to your message and desired tone.
+
+---
+
+For now, here's a basic structure you can follow:
+
+{template.prompt}
+
+Key Message: {message}
 """
         
-        for part in structure_parts:
-            post += f"{part.strip()}: Your content here based on '{message}'\n\n"
-        
-        post += f"""💡 Key Insight: {message}
-
-What are your thoughts on this? Let's discuss! 👇"""
+        if reference_text:
+            post += f"\nReference Material: {reference_text[:200]}..."
         
         return post
     
